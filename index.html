@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daily Reminder Delights</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f4f4f6; --card: #fff; --text: #111; --muted: #666; --border: #ccc; --row: #eee;
+    --input: #fff; --done: #999; --badge-bg: #eef1ff; --badge-text: #3b4fc4;
+    --alert-bg: #fff4e0; --alert-border: #f5a524; --alert-text: #7a4a00;
+    --soon: #b45309; --overdue: #e5484d; --shadow: rgba(0,0,0,.08);
+  }
+  :root[data-theme=dark] {
+    color-scheme: dark;
+    --bg: #121316; --card: #1e1f24; --text: #e8e8ea; --muted: #9a9ba3; --border: #3a3b42; --row: #2e2f36;
+    --input: #2a2b31; --done: #777; --badge-bg: #26305a; --badge-text: #aebcff;
+    --alert-bg: #3a2c10; --alert-border: #b9791a; --alert-text: #ffd699;
+    --soon: #f5a524; --overdue: #ff6b70; --shadow: rgba(0,0,0,.5);
+  }
+  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; }
+  main { max-width: 640px; margin: 40px auto; background: var(--card); padding: 24px; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow); }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 1.5rem; }
+  input[type=text], input[type=date], select { padding: 6px; font-size: 1rem; border: 1px solid var(--border); border-radius: 6px; background: var(--input); color: var(--text); }
+  #themeSel { font-size: .85rem; }
+  form { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  form input.task { flex: 1 1 100%; padding: 8px; }
+  form select.cat { flex: 1; min-width: 100px; }
+  button { padding: 8px 12px; font-size: 1rem; border: 0; border-radius: 6px; background: #2da44e; color: #fff; cursor: pointer; }
+  button.small { font-size: .85rem; padding: 6px 10px; }
+  button.del, button.edit { background: #fff; color: #333; border: 1px solid var(--border); }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { display: flex; align-items: center; gap: 8px; padding: 8px 0 8px 8px; border-bottom: 1px solid var(--row); border-left: 4px solid; flex-wrap: wrap; }
+  li.p-high { border-left-color: #e5484d; }
+  li.p-medium { border-left-color: #f5a524; }
+  li.p-low { border-left-color: #3fb950; }
+  li .main { flex: 1; min-width: 140px; }
+  li .text { word-break: break-word; }
+  li.done .text { text-decoration: line-through; color: var(--done); }
+  .meta { font-size: .8rem; color: var(--muted); margin-top: 2px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge { background: var(--badge-bg); color: var(--badge-text); padding: 1px 8px; border-radius: 10px; }
+  .due.soon { color: var(--soon); font-weight: 600; }
+  li.done .due.soon { color: var(--done); font-weight: normal; }
+  #alert { background: var(--alert-bg); border: 1px solid var(--alert-border); color: var(--alert-text); padding: 10px 12px; border-radius: 6px; margin-bottom: 16px; font-size: .95rem; }
+  #alert[hidden] { display: none; }
+  .due.overdue { color: var(--overdue); font-weight: 600; }
+  li.done .due.overdue { color: var(--done); font-weight: normal; }
+  .editbox { flex: 1; display: flex; gap: 6px; flex-wrap: wrap; }
+  .editbox input[type=text] { flex: 1 1 100%; }
+  select.pri { font-size: .85rem; }
+
+  /* Phones */
+  @media (max-width: 480px) {
+    body { padding: 8px; }
+    main { margin: 8px auto; padding: 16px; }
+    header { flex-wrap: nowrap; align-items: flex-start; }
+    h1 { font-size: 1.2rem; }
+    #themeSel { flex-shrink: 0; }
+    /* Add form: task on its own row, then category|priority, then date|Add */
+    form select.cat, form #newPri, form #newDue, form button { flex: 1 1 calc(50% - 4px); min-width: 0; box-sizing: border-box; }
+    form select.cat { order: 1; }
+    form #newPri { order: 2; }
+    form #newDue { order: 3; }
+    form button { order: 4; }
+    /* Task rows: keep priority + icons beside the text */
+    li { flex-wrap: nowrap; gap: 6px; }
+    li .main, .editbox { min-width: 0; }
+    button.small { padding: 6px 8px; }
+    li select.pri { padding: 4px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Daily Reminder Delights</h1>
+    <select id="themeSel" title="Theme" aria-label="Theme">
+      <option value="light">&#9728;&#65039; Light</option>
+      <option value="dark">&#127769; Dark</option>
+    </select>
+  </header>
+  <div id="alert" role="alert" hidden></div>
+  <form id="form">
+    <input type="text" id="input" class="task" placeholder="Add a task..." autocomplete="off">
+    <select id="newCat" class="cat" title="Category">
+      <option>Home</option>
+      <option>Work</option>
+      <option selected>Others</option>
+    </select>
+    <input type="date" id="newDue" title="Due date">
+    <select id="newPri" title="Priority">
+      <option value="high">High</option>
+      <option value="medium" selected>Medium</option>
+      <option value="low">Low</option>
+    </select>
+    <button type="submit">Add</button>
+  </form>
+  <ul id="list"></ul>
+</main>
+<script>
+  const ORDER = { high: 0, medium: 1, low: 2 };
+  const CATS = ['Home', 'Work', 'Others'];
+
+  // ---- Theme ----
+  const themeSel = document.getElementById('themeSel');
+  let theme = null;
+  try { theme = localStorage.getItem('theme'); } catch (e) {}
+  if (theme !== 'light' && theme !== 'dark') {
+    theme = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    themeSel.value = t;
+  }
+  applyTheme(theme);
+  themeSel.onchange = () => {
+    applyTheme(themeSel.value);
+    try { localStorage.setItem('theme', themeSel.value); } catch (e) {}
+  };
+
+  // ---- Data ----
+  let todos = [];
+  try { todos = JSON.parse(localStorage.getItem('todos')) || []; } catch (e) {}
+  todos.forEach(t => {
+    if (!ORDER.hasOwnProperty(t.priority)) t.priority = 'medium';
+    if (!CATS.includes(t.category)) t.category = 'Others'; // older free-text categories
+    t.due = t.due || '';
+  });
+
+  let editing = null; // the todo object currently being edited
+
+  const list = document.getElementById('list');
+  const input = document.getElementById('input');
+
+  function save() {
+    try { localStorage.setItem('todos', JSON.stringify(todos)); } catch (e) {}
+  }
+
+  function today() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function tomorrow() {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function renderAlert() {
+    const el = document.getElementById('alert');
+    const tm = tomorrow();
+    const soon = todos.filter(t => !t.done && t.due === tm);
+    if (!soon.length) { el.hidden = true; return; }
+    el.textContent = '⏰ Due tomorrow: ' + soon.map(t => t.text).join(', ');
+    el.hidden = false;
+  }
+
+  function fmtDate(s) {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function btn(label, cls, fn) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'small ' + cls;
+    b.textContent = label;
+    const names = { '✏️': 'Edit', '🗑️': 'Delete' };
+    if (names[label]) { b.title = names[label]; b.setAttribute('aria-label', names[label]); }
+    b.onclick = fn;
+    return b;
+  }
+
+  function priSelect(value, onchange) {
+    const sel = document.createElement('select');
+    sel.title = 'Priority';
+    ['high', 'medium', 'low'].forEach(p => {
+      const o = document.createElement('option');
+      o.value = p;
+      o.textContent = p[0].toUpperCase() + p.slice(1);
+      if (p === value) o.selected = true;
+      sel.appendChild(o);
+    });
+    if (onchange) sel.onchange = onchange;
+    return sel;
+  }
+
+  function catSelect(value) {
+    const sel = document.createElement('select');
+    sel.title = 'Category';
+    CATS.forEach(c => {
+      const o = document.createElement('option');
+      o.value = o.textContent = c;
+      if (c === value) o.selected = true;
+      sel.appendChild(o);
+    });
+    return sel;
+  }
+
+  function render() {
+    list.innerHTML = '';
+    renderAlert();
+    // Sort: priority (high first), then due date (earliest first, none last), then added order
+    const sorted = todos.slice().sort((a, b) =>
+      ORDER[a.priority] - ORDER[b.priority] ||
+      (a.due || '9999').localeCompare(b.due || '9999'));
+    sorted.forEach(t => {
+      const li = document.createElement('li');
+      li.className = 'p-' + t.priority + (t.done ? ' done' : '');
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = t.done;
+      cb.onchange = () => { t.done = cb.checked; save(); render(); };
+      li.appendChild(cb);
+
+      if (editing === t) {
+        const box = document.createElement('div');
+        box.className = 'editbox';
+        const ti = document.createElement('input');
+        ti.type = 'text'; ti.value = t.text; ti.placeholder = 'Task';
+        const cs = catSelect(t.category);
+        const di = document.createElement('input');
+        di.type = 'date'; di.value = t.due;
+        const ps = priSelect(t.priority);
+        const commit = () => {
+          const v = ti.value.trim();
+          if (v) t.text = v;
+          t.category = cs.value;
+          t.due = di.value;
+          t.priority = ps.value;
+          editing = null; save(); render();
+        };
+        ti.onkeydown = e => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') { editing = null; render(); }
+        };
+        box.append(ti, cs, di, ps,
+          btn('Save', '', commit),
+          btn('Cancel', 'edit', () => { editing = null; render(); }));
+        li.appendChild(box);
+        list.appendChild(li);
+        setTimeout(() => { ti.focus(); ti.select(); });
+        return;
+      }
+
+      const main = document.createElement('div');
+      main.className = 'main';
+      const span = document.createElement('div');
+      span.className = 'text';
+      span.textContent = t.text;
+      main.appendChild(span);
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const b = document.createElement('span');
+      b.className = 'badge';
+      b.textContent = t.category;
+      meta.appendChild(b);
+      if (t.due) {
+        const d = document.createElement('span');
+        const overdue = t.due < today();
+        const isSoon = t.due === tomorrow();
+        d.className = 'due' + (overdue ? ' overdue' : isSoon ? ' soon' : '');
+        d.textContent = isSoon ? 'Due tomorrow' : (overdue ? 'Overdue: ' : 'Due: ') + fmtDate(t.due);
+        meta.appendChild(d);
+      }
+      main.appendChild(meta);
+      li.appendChild(main);
+
+      const sel = priSelect(t.priority);
+      sel.className = 'pri';
+      sel.onchange = () => { t.priority = sel.value; save(); render(); };
+      li.appendChild(sel);
+
+      li.appendChild(btn('✏️', 'edit', () => { editing = t; render(); }));
+      li.appendChild(btn('🗑️', 'del', () => {
+        todos.splice(todos.indexOf(t), 1);
+        if (editing === t) editing = null;
+        save(); render();
+      }));
+      list.appendChild(li);
+    });
+  }
+
+  document.getElementById('form').onsubmit = e => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    todos.push({
+      text,
+      done: false,
+      priority: document.getElementById('newPri').value,
+      category: document.getElementById('newCat').value,
+      due: document.getElementById('newDue').value
+    });
+    input.value = '';
+    document.getElementById('newDue').value = '';
+    save(); render();
+  };
+
+  render();
+</script>
+</body>
+</html>
