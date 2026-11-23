@@ -33,6 +33,7 @@
   button.del, button.edit { background: #fff; color: #333; border: 1px solid var(--border); }
   ul { list-style: none; margin: 0; padding: 0; }
   li { display: flex; align-items: center; gap: 8px; padding: 8px 0 8px 8px; border-bottom: 1px solid var(--row); border-left: 4px solid; flex-wrap: wrap; }
+  li.group { border-left: 0; padding: 14px 0 4px; font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
   li.p-high { border-left-color: #e5484d; }
   li.p-medium { border-left-color: #f5a524; }
   li.p-low { border-left-color: #3fb950; }
@@ -56,7 +57,7 @@
     body { padding: 8px; }
     main { margin: 8px auto; padding: 16px; }
     header { flex-wrap: nowrap; align-items: flex-start; }
-    h1 { font-size: 1.2rem; color: #d32f2f; }
+    h1 { font-size: 1.2rem; color: #e91e8c; }
     #themeSel { flex-shrink: 0; }
     /* Add form: task on its own row, then category|priority, then date|Add */
     form select.cat, form #newPri, form #newDue, form button { flex: 1 1 calc(50% - 4px); min-width: 0; box-sizing: border-box; }
@@ -203,11 +204,21 @@
   function render() {
     list.innerHTML = '';
     renderAlert();
-    // Sort: priority (high first), then due date (earliest first, none last), then added order
+    // Sort: category group (Home, Work, Others), then priority (high first),
+    // then due date (earliest first, none last), then added order
     const sorted = todos.slice().sort((a, b) =>
+      CATS.indexOf(a.category) - CATS.indexOf(b.category) ||
       ORDER[a.priority] - ORDER[b.priority] ||
       (a.due || '9999').localeCompare(b.due || '9999'));
+    let lastCat = null;
     sorted.forEach(t => {
+      if (t.category !== lastCat) {
+        lastCat = t.category;
+        const h = document.createElement('li');
+        h.className = 'group';
+        h.textContent = t.category;
+        list.appendChild(h);
+      }
       const li = document.createElement('li');
       li.className = 'p-' + t.priority + (t.done ? ' done' : '');
 
